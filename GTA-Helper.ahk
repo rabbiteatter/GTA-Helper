@@ -1,6 +1,6 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
-#include Lib\AHK-ViGEm-BusV2.ahk
+#include Lib\AHK-ViGEm-Bus.ahk
 
 ; Create a new Xbox 360 controller
 controller := ViGEmXb360()

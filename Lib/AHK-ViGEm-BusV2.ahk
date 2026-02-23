@@ -1,6 +1,4 @@
 #Requires AutoHotkey v2.0
-SplitPath A_LineFile, , &thisDir
-clrPath := thisDir . "\CLRV2.ahk"
 #Include CLRV2.ahk
 
 ; ==========================================================
@@ -13,7 +11,8 @@ class ViGEmWrapper {
 
     static Init() {
         if (this.client = 0) {
-            this.asm := CLR_LoadLibrary(thisDir . "\ViGEmWrapper.dll")
+            SplitPath A_LineFile, , &Lib
+            this.asm := CLR_LoadLibrary(Lib . "\ViGEmWrapper.dll")
             this.client := true
         }
     }
@@ -40,6 +39,23 @@ class ViGEmTarget {
             MsgBox("ViGEmWrapper.dll failed to load!")
             ExitApp()
         }
+
+        this.Buttons := {}
+        this.Axes := {}
+
+        clsName := this.__Class
+        cls := %clsName%
+
+        if cls.HasOwnProp("buttons")
+            for (name, id in cls.buttons) {
+                this.Buttons.%name% := cls._ButtonHelper(this, id)
+            }
+
+        if cls.HasOwnProp("axes")
+            for name, id in cls.axes
+                this.Axes.%name% := cls._AxisHelper(this, id)
+
+        this.Dpad := cls._DpadHelper(this)
     }
 
     SendReport() {
@@ -49,42 +65,10 @@ class ViGEmTarget {
     SubscribeFeedback(callback) {
         this.Instance.SubscribeFeedback(callback)
     }
-}
 
-; ==========================================================
-; DS4 Controller
-; ==========================================================
-
-class ViGEmDS4 extends ViGEmTarget {
-
-    helperClass := "ViGEmWrapper.Ds4"
-
-    __New() {
-
-        static buttons := {
-            Square: 16, Cross: 32, Circle: 64, Triangle: 128,
-            L1: 256, R1: 512, L2: 1024, R2: 2048,
-            Share: 4096, Options: 8192, LS: 16384, RS: 32768
-        }
-
-        static specialButtons := { Ps: 1, TouchPad: 2 }
-        static axes := { LX: 2, LY: 3, RX: 4, RY: 5, LT: 0, RT: 1 }
-
-        this.Buttons := {}
-        for name, id in buttons
-            this.Buttons[name] := ViGEmDS4._ButtonHelper(this, id)
-
-        for name, id in specialButtons
-            this.Buttons[name] := ViGEmDS4._SpecialButtonHelper(this, id)
-
-        this.Axes := {}
-        for name, id in axes
-            this.Axes[name] := ViGEmDS4._AxisHelper(this, id)
-
-        this.Dpad := ViGEmDS4._DpadHelper(this)
-
-        super.__New()
-    }
+    ; ==========================================================
+    ; Shared Helpers
+    ; ==========================================================
 
     class _ButtonHelper {
         __New(parent, id) {
@@ -125,7 +109,46 @@ class ViGEmDS4 extends ViGEmTarget {
         }
 
         ConvertAxis(state) {
-            return Round(state * 2.55)
+            return state
+        }
+    }
+
+}
+; ==========================================================
+; DS4 Controller
+; ==========================================================
+
+class ViGEmDS4 extends ViGEmTarget {
+
+    helperClass := "ViGEmWrapper.Ds4"
+
+    static buttons := Map(
+        "Square", 16, "Cross", 32, "Circle", 64, "Triangle", 128,
+        "L1", 256, "R1", 512, "L2", 1024, "R2", 2048,
+        "Share", 4096, "Options", 8192,
+        "LS", 16384, "RS", 32768
+    )
+
+    static specialButtons := Map(
+        "Ps", 1, "TouchPad", 2
+    )
+
+    static axes := Map(
+        "LX", 2, "LY", 3,
+        "RX", 4, "RY", 5,
+        "LT", 0, "RT", 1
+    )
+
+    __New() {
+        super.__New()
+
+        for name, id in this.specialButtons
+            this.Buttons[name] := this._SpecialButtonHelper(this, id)
+    }
+
+    class _AxisHelper extends ViGEmTarget._AxisHelper {
+        ConvertAxis(state) {
+            return round(state * 2.55)
         }
     }
 
@@ -150,62 +173,26 @@ class ViGEmDS4 extends ViGEmTarget {
 ; ==========================================================
 ; Xbox 360 Controller
 ; ==========================================================
-
 class ViGEmXb360 extends ViGEmTarget {
-
     helperClass := "ViGEmWrapper.Xb360"
 
+    static buttons := Map(
+        "A", 4096, "B", 8192, "X", 16384, "Y", 32768,
+        "LB", 256, "RB", 512, "LS", 64, "RS", 128,
+        "Back", 32, "Start", 16, "Xbox", 1024
+    )
+
+    static axes := Map(
+        "LX", 2, "LY", 3,
+        "RX", 4, "RY", 5,
+        "LT", 0, "RT", 1
+    )
+
     __New() {
-        static buttons := Map(
-            "A", 4096, "B", 8192, "X", 16384, "Y", 32768,
-            "LB", 256, "RB", 512,
-            "LS", 64, "RS", 128,
-            "Back", 32, "Start", 16, "Xbox", 1024
-        )
-
-        static axes := Map(
-            "LX", 2, "LY", 3,
-            "RX", 4, "RY", 5,
-            "LT", 0, "RT", 1
-        )
-
-        this.Buttons := {}
-        for name, id in buttons
-            this.Buttons.%name% := ViGEmXb360._ButtonHelper(this, id)
-
-        this.Axes := {}
-        for name, id in axes
-            this.Axes.%name% := ViGEmXb360._AxisHelper(this, id)
-
-        this.Dpad := ViGEmXb360._DpadHelper(this)
-
         super.__New()
     }
 
-    class _ButtonHelper {
-        __New(parent, id) {
-            this._Parent := parent
-            this._Id := id
-        }
-
-        SetState(state) {
-            this._Parent.Instance.SetButtonState(this._Id, state)
-            this._Parent.Instance.SendReport()
-            return this._Parent
-        }
-    }
-
-    class _AxisHelper {
-        __New(parent, id) {
-            this._Parent := parent
-            this._Id := id
-        }
-
-        SetState(state) {
-            this._Parent.Instance.SetAxisState(this._Id, this.ConvertAxis(state))
-            this._Parent.Instance.SendReport()
-        }
-
+    class _AxisHelper extends ViGEmTarget._AxisHelper {
         ConvertAxis(state) {
             value := Round((state * 655.36) - 32768)
             return (value = 32768) ? 32767 : value
@@ -213,7 +200,7 @@ class ViGEmXb360 extends ViGEmTarget {
     }
 
     class _DpadHelper {
-        _DpadStates := Map(1,0, 8,0, 2,0, 4,0)
+        _DpadStates := Map(1, 0, 8, 0, 2, 0, 4, 0)
 
         __New(parent) {
             this._Parent := parent
